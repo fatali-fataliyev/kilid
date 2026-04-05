@@ -5,80 +5,72 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"sync"
-	"sync/atomic"
 
 	"github.com/fatali-fataliyev/kilid/engine"
 )
 
-func HandleEncryption(files []string, password string) error {
-	n := GetCountOfExistFiles(files)
+func HandleEncryption(kld *engine.Kilid, files []string, password string, hint string) error {
+	ff := resolveFiles(files)
 
-	switch n {
-	case 0:
-		return fmt.Errorf("there is no file to encrypt.")
-	case 1:
-		if err := engine.EncryptFile(files[0], password); err != nil {
-			return err
-		}
-		slog.Info("File encrypted successfully.")
-		return nil
-	default:
-		for _, f := range files {
-			engine.EncryptFile(f, password)
-		}
+	if len(ff) == 0 {
+		return fmt.Errorf("there is no file to encrypt")
 	}
 
-	return nil
-}
-
-func HandleDecryption(files []string, password string) error {
-	n := GetCountOfExistFiles(files)
-
-	switch n {
-	case 0:
-		return fmt.Errorf("there is no file to encrypt.")
-	case 1:
-		if err := engine.DecryptFile(files[0], password); err != nil {
-			return err
-		}
-		slog.Info("File decrypted successfully.")
-		return nil
-	default:
-		for _, f := range files {
-			engine.DecryptFile(f, password)
-		}
-	}
-
-	return nil
-}
-
-func GetCountOfExistFiles(files []string) int {
-	var c int64
-	var wg sync.WaitGroup
-
+	c := 1
 	for _, f := range files {
-		wg.Add(1)
+		if err := kld.EncryptFile(f, password, hint); err != nil {
+			slog.Error("failed to encrypt file", "error", err)
+			continue
+		}
 
-		go func(file string) {
-			defer wg.Done()
-
-			info, err := os.Stat(strings.TrimSpace(file))
-			if os.IsNotExist(err) {
-				slog.Error("file does not exist: ", file)
-				return
-			}
-
-			if info.IsDir() {
-				slog.Error(file, "is a directory, not a file.")
-				return
-			}
-
-			atomic.AddInt64(&c, 1)
-		}(f)
+		fmt.Printf("\n Progress: [%d/%d] (%.0f%%)\n", c, len(ff), (float64(c) / float64(len(ff)) * 100))
+		slog.Info(fmt.Sprintf("%q encrypted successfully", f))
+		c++
 	}
 
-	wg.Wait()
-	total := int(atomic.LoadInt64(&c))
-	return total
+	return nil
+}
+
+func HandleDecryption(kld *engine.Kilid, files []string, password string) error {
+	ff := resolveFiles(files)
+
+	if len(ff) == 0 {
+		return fmt.Errorf("there is no file to decrypt")
+	}
+
+	c := 1
+	for _, f := range files {
+		hint, err := kld.DecryptFile(f, password)
+		if err != nil {
+			slog.Error("failed to decrypt file", "error", err)
+			if strings.Contains(err.Error(), "password") {
+				slog.Info(fmt.Sprintf("Password Hint: %q", hint))
+			}
+			continue
+		}
+
+		fmt.Printf("\n Progress: [%d/%d] (%.0f%%)\n", c, len(ff), (float64(c) / float64(len(ff)) * 100))
+		slog.Info(fmt.Sprintf("%q decrypted successfully", f))
+		c++
+	}
+
+	return nil
+}
+
+func resolveFiles(ff []string) []string {
+	var files []string
+
+	for _, f := range ff {
+		info, err := os.Stat(strings.TrimSpace(f))
+		if os.IsNotExist(err) {
+			slog.Error(fmt.Sprintf("%q does not exist", f))
+			continue
+		}
+		if info.IsDir() {
+			slog.Error(fmt.Sprintf("%q is a directory, not a file", f))
+			continue
+		}
+		files = append(files, f)
+	}
+	return files
 }

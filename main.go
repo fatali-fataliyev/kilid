@@ -9,15 +9,16 @@ import (
 	"strings"
 
 	"github.com/fatali-fataliyev/kilid/commands"
+	"github.com/fatali-fataliyev/kilid/engine"
 )
 
 //go:embed version.txt
 var version string
 
 func main() {
-	fmt.Println("kilid v" + strings.TrimSpace(version))
-
-	cmd := commands.Init()
+	fmt.Println("KLD v" + strings.TrimSpace(version))
+	kld := engine.NewKilid(version)
+	cmd := commands.Init(kld)
 
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		slog.Error(err.Error())
