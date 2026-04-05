@@ -1,18 +1,20 @@
-# [Logo](./docs/images/cover.png)
+<p align="center">
+  <img src="./docs/images/cover.png" alt="Kilid Logo" width="400">
+</p>
 
-## Kilid 🔐
+<h1 align="center">Kilid 🔐</h1>
 
 **Kilid** is a minimalist, high-performance CLI tool designed to protect your **sensitive files using AES Military-Grade Encryption**.
-Everything stays on your machine.
 
 ---
 
 ### 🚀 Key Features
 
-- **AES Encryption:** Industry-standard protection for your data.
-- **Zero Trust:** Kilid itself does not have any idea about your password, only you know.
-- **Built-in Safety:** Mandatory password hints to prevent permanent data loss (perfect for the ADHD-brained among us! 🧠).
-- **Privacy First:** Works 100% offline.
+- **Encryption:** Kilid using strong <i>AES</i> encryption for maximum security.
+- **Transparency:** Kilid never see or store your password. Only you know.
+- **Hint:** Integrated password hints to prevent accidental password forget.
+- **Privacy:** 100% local execution, Everything stays on your machine.
+- **Tamper-Proof:** Automatic integrity checks block access if encrypted data is altered.
 
 ---
 
@@ -20,7 +22,7 @@ Everything stays on your machine.
 
 1. **Input:** Pass your files to Kilid.
 2. **Secure:** Set a strong password.
-3. **Hint:** Create a mandatory password hint (highly recommended since lost passwords **cannot** be recovered).
+3. **Hint:** Create a password hint (HIGHLY recommended since lost passwords **cannot** be recovered).
 4. **Result:** Your file is transformed into a secure `.kld` vault.
 
 ---
@@ -39,7 +41,7 @@ If you have Go installed, run:
 
 #### 2. Pre-compiled Binaries
 
-#### Download the latest executable for your OS from the [Releases page](xxx).
+#### Download the latest executable for your OS from the [Releases page](https://github.com/fatali-fataliyev/kilid/releases/tag/v1.0.0).
 
 ---
 
@@ -48,7 +50,7 @@ If you have Go installed, run:
 #### 1. Encrypt a File
 
 ```bash
-    kilid enc secret.txt
+kilid enc secret.txt
 ```
 
 <i>**You will be prompted to enter a password and a hint.**</i>
@@ -56,7 +58,7 @@ If you have Go installed, run:
 #### 2. Decrypt a File
 
 ```bash
-    kilid dec secret.kld
+kilid dec secret.kld
 ```
 
 #### 3. Inspect Metadata
@@ -64,13 +66,13 @@ If you have Go installed, run:
 **View file details without decrypting them**
 
 ```bash
-    kilid info secret.kld
+kilid info secret.kld
 ```
 
-**Exmaple output**:
+**Example output**:
 
 ```
-─── File Details: gizli.kld ───
+─── File Details: secret.kld ───
 Original Extension   : .txt
 Password Hint        : tubu
 Encrypted At         : 2026-04-05 09:53:34
@@ -80,34 +82,41 @@ Kilid Version        : 1.0.0
 
 ### 4. 🪛 Advanced Flags
 
-- **Delete Source (-d, --delete)**: Automatically wipes the original file, so use with caution.
+- **Delete Source (-d, --delete)**: Automatically wipes the source file(Use with caution).
 
 ```bash
+# Encrypts and deletes original .txt
 kilid enc passwords.txt -d
-```
 
-**Creates passwords.kld and deletes passwords.txt**
-
-```bash
+# Decrypts and deletes encrypted .kld
 kilid dec passwords.kld -d
 ```
 
-**Creates passwords.txt and deletes passwords.kld**
-
-- **Auto-Confirm (-y, --yes):** Automatically overwrites existing files during decryption.
+- **Auto-Confirm (-y, --yes):** Automatically overwrites existing files during decryption/encryption.
 
 ```bash
-kld dec secret.kld -y
+# Force overwrite if secret.txt already exists
+kilid dec secret.kld -y
 ```
 
-**If there is a file named secret.txt when decryption its value will be overwrite**
+---
+
+### 🧪 Tested On
+
+| Platform       | Status    | Architecture |
+| :------------- | :-------- | :----------- |
+| **Windows 11** | ✅ Tested | amd64        |
+| **Linux**      | ✅ Tested | amd64        |
+| **macOS**      | ✅ Tested | arm64        |
 
 ---
 
 ### 🤝 Contributing & Feedback
 
-#### If you have any idea/improvment feel free to open an issue or join project.
+#### If you have any idea/improvement feel free to open an issue or join the project.
 
-### ❤️ Special Thanks
+---
 
-Big thanks to [Sanan R. Fataliyev](abc.com) for the architectural design help!
+## ❤️ Special Thanks
+
+Big thanks to [Sanan R. Fataliyev](https://github.com/sanan-fataliyev) for the architectural design help!
