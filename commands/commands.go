@@ -22,6 +22,18 @@ func Init(kld *engine.Kilid) *cli.Command {
 				Name:    "enc",
 				Aliases: []string{"e"},
 				Usage:   "Encrypt file(s)",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:    "delete",
+						Aliases: []string{"d"},
+						Usage:   "Deletes source file",
+					},
+					&cli.BoolFlag{
+						Name:    "yes",
+						Aliases: []string{"y"},
+						Usage:   "Answer 'yes' to all prompts, [!]: existing files will be overwritten",
+					},
+				},
 				Arguments: []cli.Argument{&cli.StringArgs{
 					Name: "files",
 					Max:  -1,
@@ -31,7 +43,8 @@ func Init(kld *engine.Kilid) *cli.Command {
 					var password string
 					var hint string
 					files := cmd.StringArgs("files")
-
+					deleteSource := cmd.Bool("delete")
+					yesAll := cmd.Bool("yes")
 					scanner := bufio.NewScanner(os.Stdin)
 
 					print("Password: ")
@@ -45,7 +58,7 @@ func Init(kld *engine.Kilid) *cli.Command {
 					scanner.Scan()
 					hint = scanner.Text()
 
-					return handlers.HandleEncryption(kld, files, password, hint)
+					return handlers.HandleEncryption(kld, files, password, hint, deleteSource, yesAll)
 				},
 			},
 
@@ -54,6 +67,18 @@ func Init(kld *engine.Kilid) *cli.Command {
 				Name:    "dec",
 				Aliases: []string{"d"},
 				Usage:   "Decrypt file(s)",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:    "delete",
+						Aliases: []string{"d"},
+						Usage:   "Deletes source file",
+					},
+					&cli.BoolFlag{
+						Name:    "yes",
+						Aliases: []string{"y"},
+						Usage:   "Answer 'yes' to all prompts. [!] existing files will be overwritten",
+					},
+				},
 				Arguments: []cli.Argument{&cli.StringArgs{
 					Name: "files",
 					Max:  -1,
@@ -63,6 +88,8 @@ func Init(kld *engine.Kilid) *cli.Command {
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					var password string
 					files := cmd.StringArgs("files")
+					deleteSource := cmd.Bool("delete")
+					yesAll := cmd.Bool("yes")
 
 					print("Password: ")
 					bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
@@ -71,7 +98,24 @@ func Init(kld *engine.Kilid) *cli.Command {
 					}
 					password = string(bytePassword)
 
-					return handlers.HandleDecryption(kld, files, password)
+					return handlers.HandleDecryption(kld, files, password, deleteSource, yesAll)
+				},
+			},
+
+			// INFO
+			{
+				Name:    "info",
+				Aliases: []string{"i"},
+				Usage:   "Show metadata and details for .kld files",
+				Arguments: []cli.Argument{
+					&cli.StringArgs{
+						Name: "files",
+						Max:  -1,
+						Min:  1,
+					}},
+
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return handlers.HandleInfo(kld, cmd.StringArgs("files"))
 				},
 			},
 		},

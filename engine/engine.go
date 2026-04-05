@@ -38,7 +38,7 @@ func generateKey(password string) []byte {
 	return hash[:]
 }
 
-func (kld *Kilid) EncryptFile(file string, password string, hint string) error {
+func (kld *Kilid) EncryptFile(file string, password string, hint string, deleteSource bool, yesAll bool) error {
 	var ef EncryptedFile
 
 	data, err := os.ReadFile(file)
@@ -77,27 +77,37 @@ func (kld *Kilid) EncryptFile(file string, password string, hint string) error {
 	if isFileExistsAlready(f) {
 		slog.Warn(fmt.Sprintf("%q already exists, overwrite? [y/n]", f))
 		var answer string
-		fmt.Scanln(&answer)
-		answer = strings.TrimSpace(answer)
-		answer = strings.ToLower(answer)
+		if yesAll {
+			answer = "y"
+		} else {
+			fmt.Scanln(&answer)
+			answer = strings.TrimSpace(answer)
+			answer = strings.ToLower(answer)
+		}
 
 		switch answer {
 		case "y":
-			saveFile(b, f)
+			return saveFile(b, f)
 		case "n":
 			return fmt.Errorf("operation aborted")
 		default:
-			saveFile(b, f)
+			return saveFile(b, f)
 		}
-		return nil
 	}
 
-	saveFile(b, f)
+	if err := saveFile(b, f); err != nil {
+		return err
+	}
+	if deleteSource {
+		if err := deleteSourceFile(file); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
 
-func (kld *Kilid) DecryptFile(file string, password string) (string, error) {
+func (kld *Kilid) DecryptFile(file string, password string, deleteSource bool, yesAll bool) (string, error) {
 	if filepath.Ext(file) != ".kld" {
 		return "", fmt.Errorf("only .kld files can be decrypted")
 	}
@@ -138,24 +148,58 @@ func (kld *Kilid) DecryptFile(file string, password string) (string, error) {
 	if isFileExistsAlready(f) {
 		slog.Warn(fmt.Sprintf("%q already exists, overwrite? [y/n]", f))
 		var answer string
-		fmt.Scanln(&answer)
-		answer = strings.TrimSpace(answer)
-		answer = strings.ToLower(answer)
+		if yesAll {
+			answer = "y"
+		} else {
+			fmt.Scanln(&answer)
+			answer = strings.TrimSpace(answer)
+			answer = strings.ToLower(answer)
+		}
 
 		switch answer {
 		case "y":
-			saveFile(decryptedData, f)
+			return "", saveFile(decryptedData, f)
 		case "n":
 			return "", fmt.Errorf("operation cancelled")
 		default:
-			saveFile(decryptedData, f)
+			return "", saveFile(decryptedData, f)
 		}
-		return "", nil
 	}
 
-	saveFile(decryptedData, f)
+	if err := saveFile(decryptedData, f); err != nil {
+		return "", err
+	}
+	if deleteSource {
+		if err := deleteSourceFile(file); err != nil {
+			return "", err
+		}
+	}
 
 	return "", nil
+}
+
+func (kld *Kilid) PrintFileInfo(file string) error {
+	if filepath.Ext(file) != ".kld" {
+		return fmt.Errorf("only .kld files can be printed")
+	}
+
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	var ef EncryptedFile
+
+	if err := json.Unmarshal(data, &ef); err != nil {
+		return fmt.Errorf("failed to parse raw data to json: %w", err)
+	}
+	fmt.Printf("\n─── File Details: %s ───\n", file)
+	fmt.Printf("%-20s : %s\n", "Original Extension", ef.OriginalExtension)
+	fmt.Printf("%-20s : %s\n", "Password Hint", ef.PasswordHint)
+	fmt.Printf("%-20s : %s\n", "Encrypted At", ef.EncryptedAt)
+	fmt.Printf("%-20s : %v\n", "Kilid Version", ef.KilidVersion)
+	fmt.Println(strings.Repeat("─", 45))
+	return nil
 }
 
 func getFileName(file string) string {
@@ -173,7 +217,14 @@ func isFileExistsAlready(fileName string) bool {
 
 func saveFile(b []byte, fileName string) error {
 	if err := os.WriteFile(fileName, b, 0644); err != nil {
-		return fmt.Errorf("failed to save encrypted file: %w", err)
+		return fmt.Errorf("failed to save file: %w", err)
+	}
+	return nil
+}
+
+func deleteSourceFile(fileName string) error {
+	if err := os.Remove(fileName); err != nil {
+		return fmt.Errorf("failed to delete source file: %w", err)
 	}
 	return nil
 }
