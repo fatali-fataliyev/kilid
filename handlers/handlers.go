@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/fatali-fataliyev/kilid/engine"
+	"github.com/fatali-fataliyev/kilid/v2/engine"
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
 )

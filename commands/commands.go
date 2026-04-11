@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/fatali-fataliyev/kilid/engine"
-	"github.com/fatali-fataliyev/kilid/handlers"
+	"github.com/fatali-fataliyev/kilid/v2/engine"
+	"github.com/fatali-fataliyev/kilid/v2/handlers"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
 )

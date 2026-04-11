@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/fatali-fataliyev/kilid/commands"
-	"github.com/fatali-fataliyev/kilid/engine"
+	"github.com/fatali-fataliyev/kilid/v2/commands"
+	"github.com/fatali-fataliyev/kilid/v2/engine"
 )
 
 //go:embed version.txt
