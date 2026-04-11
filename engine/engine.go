@@ -1,14 +1,15 @@
 package engine
 
 import (
+	"bufio"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,16 +20,17 @@ type Kilid struct {
 	Version string
 }
 
+const ChunkSize = 1024 * 1024 // 1MB
+
 func NewKilid(v string) *Kilid {
 	return &Kilid{
 		Version: v,
 	}
 }
 
-type EncryptedFile struct {
-	OriginalExtension string `json:"original_extension"`
-	PasswordHint      string `json:"password_hint"`
-	EncrpytedData     []byte `json:"encrypted_data"`
+type MetaData struct {
+	OriginalExtension string `json:"ext"`
+	PasswordHint      string `json:"hint"`
 	EncryptedAt       string `json:"date"`
 	KilidVersion      string `json:"kilid_version"`
 }
@@ -38,12 +40,37 @@ func generateKey(password string) []byte {
 	return hash[:]
 }
 
-func (kld *Kilid) EncryptFile(file string, password string, hint string, deleteSource bool, yesAll bool) error {
-	var ef EncryptedFile
+func (kld *Kilid) EncryptFile(file string, password string, hint string, deleteSource bool, yesAll bool, onProgress func(int)) error {
+	var md MetaData
 
-	data, err := os.ReadFile(file)
+	src, err := os.Open(file)
 	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer src.Close()
+
+	dst, err := os.Create(kld.GetFileName(file) + ".kld")
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer dst.Close()
+
+	md.OriginalExtension = filepath.Ext(file)
+	md.PasswordHint = hint
+	md.EncryptedAt = time.Now().Format("2006-01-02 15:04:05")
+	md.KilidVersion = kld.Version
+
+	b, err := json.Marshal(md)
+	if err != nil {
+		return fmt.Errorf("failed to create metadata: %w", err)
+	}
+	n, err := dst.Write(b)
+	if err != nil || n != len(b) {
+		return fmt.Errorf("failed to write metadata: %w", err)
+	}
+	n, err = dst.Write([]byte("/"))
+	if err != nil || n != 1 {
+		return fmt.Errorf("failed to write metadata seperator: %w", err)
 	}
 
 	block, err := aes.NewCipher(generateKey(password))
@@ -53,51 +80,43 @@ func (kld *Kilid) EncryptFile(file string, password string, hint string, deleteS
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return fmt.Errorf("failed to create GCM: %w", err)
+		return fmt.Errorf("failed to generate GCM: %w", err)
 	}
 
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return fmt.Errorf("failed to encrypt file: %w", err)
-	}
+	buf := make([]byte, ChunkSize)
 
-	ciphertext := gcm.Seal(nonce, nonce, data, nil)
-	ef.OriginalExtension = filepath.Ext(file)
-	ef.PasswordHint = hint
-	ef.EncrpytedData = ciphertext
-	ef.EncryptedAt = time.Now().Format("2006-01-02 15:04:05")
-	ef.KilidVersion = kld.Version
+	myBuf := make([]byte, ChunkSize)
+	dst.Read(myBuf)
 
-	b, err := json.Marshal(ef)
-	if err != nil {
-		return fmt.Errorf("failed to convert encrypted file to json: %w", err)
-	}
+	for {
+		n, err := src.Read(buf)
+		if n > 0 {
+			chunk := buf[:n]
+			nonce := make([]byte, gcm.NonceSize())
+			io.ReadFull(rand.Reader, nonce)
 
-	f := getFileName(file) + ".kld"
-	if isFileExistsAlready(f) {
-		slog.Warn(fmt.Sprintf("%q already exists, overwrite? [y/n]", f))
-		var answer string
-		if yesAll {
-			answer = "y"
-		} else {
-			fmt.Scanln(&answer)
-			answer = strings.TrimSpace(answer)
-			answer = strings.ToLower(answer)
+			ciphertext := gcm.Seal(nil, nonce, chunk, nil)
+			l := uint32(len(ciphertext))
+			binary.Write(dst, binary.LittleEndian, l)
+
+			n, err := dst.Write(nonce)
+			if err != nil || n != len(nonce) {
+				return fmt.Errorf("failed to save nonce: %w", err)
+			}
+			n, err = dst.Write(ciphertext)
+			if err != nil || n != len(ciphertext) {
+				return fmt.Errorf("failed to save chunk: %w", err)
+			}
+			onProgress(n)
 		}
-
-		switch answer {
-		case "y":
-			return saveFile(b, f)
-		case "n":
-			return fmt.Errorf("operation aborted")
-		default:
-			return saveFile(b, f)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read chunk: %w", err)
 		}
 	}
 
-	if err := saveFile(b, f); err != nil {
-		return err
-	}
 	if deleteSource {
 		if err := deleteSourceFile(file); err != nil {
 			return err
@@ -107,119 +126,136 @@ func (kld *Kilid) EncryptFile(file string, password string, hint string, deleteS
 	return nil
 }
 
-func (kld *Kilid) DecryptFile(file string, password string, deleteSource bool, yesAll bool) (string, error) {
+func (kld *Kilid) DecryptFile(file string, password string, deleteSource bool, yesAll bool, onProgress func(int)) []error {
 	if filepath.Ext(file) != ".kld" {
-		return "", fmt.Errorf("only .kld files can be decrypted")
+		return []error{fmt.Errorf("only .kld files can be decrypted")}
 	}
 
-	data, err := os.ReadFile(file)
+	src, err := os.Open(file)
 	if err != nil {
-		return "", fmt.Errorf("failed to read file: %w", err)
+		return []error{fmt.Errorf("failed to open file: %w", err)}
+	}
+	defer src.Close()
+
+	var md MetaData
+	r := bufio.NewReader(src)
+	metadataBytes, err := r.ReadBytes('/')
+	if err != nil {
+		return []error{fmt.Errorf("failed to read metadata: %w", err)}
+	}
+	onProgress(len(metadataBytes))
+	metadataStr := string(metadataBytes)
+	metadataStr = strings.TrimSuffix(metadataStr, "/")
+
+	if err := json.Unmarshal([]byte(metadataStr), &md); err != nil {
+		return []error{fmt.Errorf("failed to parse metadata: %w", err)}
 	}
 
-	var ef EncryptedFile
-	if err := json.Unmarshal(data, &ef); err != nil {
-		return "", fmt.Errorf("failed to parse encrypted file to json: %w", err)
+	dst, err := os.Create(kld.GetFileName(file) + md.OriginalExtension)
+	if err != nil {
+		return []error{fmt.Errorf("failed to create output file: %w", err)}
 	}
+	defer dst.Close()
 
 	block, err := aes.NewCipher(generateKey(password))
 	if err != nil {
-		return "", fmt.Errorf("failed to generate block from password: %w", err)
+		return []error{fmt.Errorf("failed to generate block from password: %w", err)}
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", fmt.Errorf("failed to create GCM: %w", err)
+		return []error{fmt.Errorf("failed to create GCM: %w", err)}
 	}
 
 	nonceSize := gcm.NonceSize()
-	if len(ef.EncrpytedData) < nonceSize {
-		return "", fmt.Errorf("ciphertext too short")
-	}
 
-	nonce, actualCiphertext := ef.EncrpytedData[:nonceSize], ef.EncrpytedData[nonceSize:]
-
-	decryptedData, err := gcm.Open(nil, nonce, actualCiphertext, nil)
-	if err != nil {
-		return ef.PasswordHint, fmt.Errorf("password is wrong or data tampered")
-	}
-
-	f := getFileName(file) + ef.OriginalExtension
-	if isFileExistsAlready(f) {
-		slog.Warn(fmt.Sprintf("%q already exists, overwrite? [y/n]", f))
-		var answer string
-		if yesAll {
-			answer = "y"
-		} else {
-			fmt.Scanln(&answer)
-			answer = strings.TrimSpace(answer)
-			answer = strings.ToLower(answer)
+	for {
+		var length uint32
+		err := binary.Read(r, binary.LittleEndian, &length)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return []error{fmt.Errorf("failed to read chunk length: %w", err)}
 		}
 
-		switch answer {
-		case "y":
-			return "", saveFile(decryptedData, f)
-		case "n":
-			return "", fmt.Errorf("operation cancelled")
-		default:
-			return "", saveFile(decryptedData, f)
+		nonce := make([]byte, nonceSize)
+		if _, err := io.ReadFull(r, nonce); err != nil {
+			return []error{fmt.Errorf("failed to read nonce: %w", err)}
 		}
+
+		ciphertext := make([]byte, length)
+		if _, err := io.ReadFull(r, ciphertext); err != nil {
+			return []error{fmt.Errorf("failed to read ciphertext: %w", err)}
+		}
+
+		plaindata, err := gcm.Open(nil, nonce, ciphertext, nil)
+		if err != nil {
+			dst.Close()
+			if err := os.Remove(dst.Name()); err != nil {
+				return []error{fmt.Errorf("failed to delete temoporary output file: %w", err), fmt.Errorf("password is wrong or data tampered"), fmt.Errorf("Password Hint: %s", md.PasswordHint)}
+			}
+			return []error{fmt.Errorf("password is wrong or data tampered"), fmt.Errorf("Password Hint: %s", md.PasswordHint)}
+		}
+
+		if _, err := dst.Write(plaindata); err != nil {
+			return []error{fmt.Errorf("failed to save data: %w", err)}
+		}
+
+		bytesConsumed := 4 + nonceSize + int(length) // I forget to calc overheeads caused: Progress bar deadlock.
+		onProgress(bytesConsumed)
 	}
 
-	if err := saveFile(decryptedData, f); err != nil {
-		return "", err
-	}
 	if deleteSource {
 		if err := deleteSourceFile(file); err != nil {
-			return "", err
+			return []error{err}
 		}
 	}
 
+	return nil
+
+}
+
+func (kld *Kilid) Info(file string, onlyExt bool) (string, error) {
+	if filepath.Ext(file) != ".kld" {
+		return "", fmt.Errorf("only .kld files can be printed")
+	}
+
+	src, err := os.Open(file)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %w", err)
+	}
+	r := bufio.NewReader(src)
+	b, err := r.ReadBytes('/')
+	if err != nil {
+		return "", fmt.Errorf("failed to read metadata: %w", err)
+	}
+	src.Close()
+	mdString := string(b)
+	mdString = strings.TrimSuffix(mdString, "/")
+
+	var md MetaData
+
+	if err := json.Unmarshal([]byte(mdString), &md); err != nil {
+		return "", fmt.Errorf("failed to parse metadata: %w", err)
+	}
+
+	if onlyExt {
+		return md.OriginalExtension, nil
+	}
+
+	fmt.Printf("\n─── File Details: %s ───\n", file)
+	fmt.Printf("%-20s : %s\n", "Original Extension", md.OriginalExtension)
+	fmt.Printf("%-20s : %s\n", "Password Hint", md.PasswordHint)
+	fmt.Printf("%-20s : %s\n", "Encrypted At", md.EncryptedAt)
+	fmt.Printf("%-20s : %v\n", "Kilid Version", md.KilidVersion)
+	fmt.Println(strings.Repeat("─", 45))
 	return "", nil
 }
 
-func (kld *Kilid) PrintFileInfo(file string) error {
-	if filepath.Ext(file) != ".kld" {
-		return fmt.Errorf("only .kld files can be printed")
-	}
-
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
-	}
-
-	var ef EncryptedFile
-
-	if err := json.Unmarshal(data, &ef); err != nil {
-		return fmt.Errorf("failed to parse raw data to json: %w", err)
-	}
-	fmt.Printf("\n─── File Details: %s ───\n", file)
-	fmt.Printf("%-20s : %s\n", "Original Extension", ef.OriginalExtension)
-	fmt.Printf("%-20s : %s\n", "Password Hint", ef.PasswordHint)
-	fmt.Printf("%-20s : %s\n", "Encrypted At", ef.EncryptedAt)
-	fmt.Printf("%-20s : %v\n", "Kilid Version", ef.KilidVersion)
-	fmt.Println(strings.Repeat("─", 45))
-	return nil
-}
-
-func getFileName(file string) string {
+func (kld *Kilid) GetFileName(file string) string {
 	fileName := filepath.Base(file)
 	return strings.TrimSuffix(fileName, filepath.Ext(fileName))
-}
-
-func isFileExistsAlready(fileName string) bool {
-	i, err := os.Stat(fileName)
-	if err == nil && !i.IsDir() {
-		return true
-	}
-	return false
-}
-
-func saveFile(b []byte, fileName string) error {
-	if err := os.WriteFile(fileName, b, 0644); err != nil {
-		return fmt.Errorf("failed to save file: %w", err)
-	}
-	return nil
 }
 
 func deleteSourceFile(fileName string) error {

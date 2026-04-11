@@ -57,7 +57,7 @@ func Init(kld *engine.Kilid) *cli.Command {
 					print("\nHint (e.g first dog): ")
 					scanner.Scan()
 					hint = scanner.Text()
-
+					fmt.Println()
 					return handlers.HandleEncryption(kld, files, password, hint, deleteSource, yesAll)
 				},
 			},
@@ -97,7 +97,7 @@ func Init(kld *engine.Kilid) *cli.Command {
 						return fmt.Errorf("failed to get password")
 					}
 					password = string(bytePassword)
-
+					fmt.Println()
 					return handlers.HandleDecryption(kld, files, password, deleteSource, yesAll)
 				},
 			},
