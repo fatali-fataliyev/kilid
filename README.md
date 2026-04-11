@@ -41,7 +41,7 @@ If you have Go installed, run:
 
 #### 2. Pre-compiled Binaries
 
-#### Download the latest executable for your OS from the [Releases page](https://github.com/fatali-fataliyev/kilid/releases/tag/v1.0.0).
+#### Download the latest executable for your OS from the [Releases Page](https://github.com/fatali-fataliyev/kilid/releases)
 
 ---
 
