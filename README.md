@@ -34,7 +34,7 @@
 If you have Go installed, run:
 
 ```bash
-    go install github.com/fatali-fataliyev/kilid@latest
+    go install github.com/fatali-fataliyev/kilid/v2@latest
 ```
 
 **Note**: Verify by typing `kilid -h`
