@@ -101,14 +101,14 @@ kilid dec secret.kld -y
 
 ---
 
-### What’s New in v2.0
+### What’s New in v2.0.0
 
 - Large File Support: Efficient stream-processing handles files of any size with minimal RAM usage.
 - Concurrent Processing: Encrypt and decrypt multiple files simultaneously.
 - Live UI: Real-time multi-file progress bars powered by [mbp](https://github.com/vbauerster/mpb).
 - Stability: Various bug fixes and performance optimizations.
 
----
+> See [full history](./CHANGELOG.md)
 
 ### 🧪 Tested On
 
