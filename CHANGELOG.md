@@ -27,3 +27,13 @@
 - Various bug fixes and performance optimizations.
 
 ---
+
+## [2.1.0] - 2026-04-19
+
+### Added
+
+- `-v` flag to print Kilid version
+
+### Fixed
+
+- ?
