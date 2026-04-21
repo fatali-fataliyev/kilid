@@ -1,4 +1,4 @@
-module github.com/fatali-fataliyev/kilid/v2
+module github.com/fatali-fataliyev/kilid/v3
 
 go 1.26.1
 

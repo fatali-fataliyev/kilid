@@ -23,9 +23,7 @@ type Kilid struct {
 	ArgonParams map[string]int
 }
 
-// const ChunkSize = 1024 * 1024 // 1MB
-
-const ChunkSize = 10 // 1byte
+const ChunkSize = 1024 * 1024 // 1MB
 
 func NewKilid(v string, params map[string]int) *Kilid {
 	return &Kilid{

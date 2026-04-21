@@ -42,7 +42,7 @@
 
 - `version or v` command to display current version.
 - Password confirmation prompt to prevent typos.
-- Added `-wipe` flag for secure file shredding, overwrites data with random bytes to prevent recovery.
+- Added `-wipe` flag to **Encryption** command for secure file shredding, overwrites original data with random bytes to prevent recovery.
 
 ### Fixed
 

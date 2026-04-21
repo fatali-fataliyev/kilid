@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/fatali-fataliyev/kilid/v2/commands"
-	"github.com/fatali-fataliyev/kilid/v2/config"
-	"github.com/fatali-fataliyev/kilid/v2/engine"
+	"github.com/fatali-fataliyev/kilid/v3/commands"
+	"github.com/fatali-fataliyev/kilid/v3/config"
+	"github.com/fatali-fataliyev/kilid/v3/engine"
 )
 
 //go:embed version.txt

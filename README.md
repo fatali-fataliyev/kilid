@@ -34,7 +34,7 @@
 If you have Go installed, run:
 
 ```bash
-go install github.com/fatali-fataliyev/kilid/v2@latest
+go install github.com/fatali-fataliyev/kilid/v3@latest
 ```
 
 **Note**: Verify by typing `kilid -h`
@@ -53,7 +53,7 @@ go install github.com/fatali-fataliyev/kilid/v2@latest
 kilid enc secret.txt
 ```
 
-<i>**You will be prompted to enter a password and a hint.**</i>
+<i>**You will be prompted to enter confirm password and a password hint.**</i>
 
 #### 2. Decrypt a File
 
@@ -99,14 +99,19 @@ kilid dec passwords.kld -d
 kilid dec secret.kld -y
 ```
 
+- **Source file shredding (-wipe)**: Shreds source files after encryption to prevent restoration via recovery software.
+
+```bash
+kilid enc passwords.txt -wipe
+```
+
 ---
 
-### What’s New in v2.0.0
+### What’s New in v3
 
-- Large File Support: Efficient stream-processing handles files of any size with minimal RAM usage.
-- Concurrent Processing: Encrypt and decrypt multiple files simultaneously.
-- Live UI: Real-time multi-file progress bars powered by [mbp](https://github.com/vbauerster/mpb).
-- Stability: Various bug fixes and performance optimizations.
+- Replaced SHA256 with Argon2id to prevent brute-force and rainbow table risks.
+- Password confirmation prompt to prevent typos.
+- Added `-wipe` feature to shred source files after **encryption**, preventing data recovery.
 
 > See [full history](./CHANGELOG.md)
 
