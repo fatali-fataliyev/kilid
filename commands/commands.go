@@ -41,6 +41,7 @@ func Init(kld *engine.Kilid) *cli.Command {
 				}},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					var password string
+					var confirmPassword string
 					var hint string
 					files := cmd.StringArgs("files")
 					deleteSource := cmd.Bool("delete")
@@ -48,11 +49,22 @@ func Init(kld *engine.Kilid) *cli.Command {
 					scanner := bufio.NewScanner(os.Stdin)
 
 					print("Password: ")
-					bytePassword, err := term.ReadPassword(int(os.Stdin.Fd()))
+					b, err := term.ReadPassword(int(os.Stdin.Fd()))
 					if err != nil {
 						return fmt.Errorf("failed to get password")
 					}
-					password = string(bytePassword)
+					password = string(b)
+
+					print("\nConfirm password: ")
+					n, err := term.ReadPassword(int(os.Stdin.Fd()))
+					if err != nil {
+						return fmt.Errorf("failed to get confirm password: %w", err)
+					}
+					confirmPassword = string(n)
+
+					if confirmPassword != password {
+						return fmt.Errorf("passwords do not match")
+					}
 
 					print("\nHint (e.g first dog): ")
 					scanner.Scan()
@@ -116,6 +128,17 @@ func Init(kld *engine.Kilid) *cli.Command {
 
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					return handlers.HandleInfo(kld, cmd.StringArgs("files"))
+				},
+			},
+
+			// VERSION
+			{
+				Name:    "version",
+				Aliases: []string{"v"},
+				Usage:   "Show Kilid version",
+				Action: func(ctx context.Context, c *cli.Command) error {
+					fmt.Println("Version", kld.Version)
+					return nil
 				},
 			},
 		},

@@ -19,6 +19,8 @@ func HandleEncryption(kld *engine.Kilid, files []string, password string, hint s
 		return fmt.Errorf("no files to encrypt")
 	}
 
+	fmt.Println("file: ", ff, len(ff))
+
 	var fails int32
 	var p *mpb.Progress
 

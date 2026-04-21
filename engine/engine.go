@@ -5,8 +5,8 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,30 +14,45 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/argon2"
 )
 
 type Kilid struct {
-	Version string
+	Version     string
+	ArgonParams map[string]int
 }
 
-const ChunkSize = 1024 * 1024 // 1MB
+// const ChunkSize = 1024 * 1024 // 1MB
 
-func NewKilid(v string) *Kilid {
+const ChunkSize = 10 // 1byte
+
+func NewKilid(v string, params map[string]int) *Kilid {
 	return &Kilid{
-		Version: v,
+		Version:     v,
+		ArgonParams: params,
 	}
 }
 
 type MetaData struct {
-	OriginalExtension string `json:"ext"`
-	PasswordHint      string `json:"hint"`
-	EncryptedAt       string `json:"date"`
-	KilidVersion      string `json:"kilid_version"`
+	OriginalExtension string         `json:"ext"`
+	PasswordHint      string         `json:"hint"`
+	Date              string         `json:"date"`
+	Version           string         `json:"version"`
+	Salt              string         `json:"salt"`
+	ArgonParams       map[string]int `json:"argon_params"`
 }
 
-func generateKey(password string) []byte {
-	hash := sha256.Sum256([]byte(password))
-	return hash[:]
+func generateSalt() ([]byte, error) {
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, fmt.Errorf("failed to generate salt: %w", err)
+	}
+	return salt, nil
+}
+
+func deriveKey(password string, salt []byte, params map[string]int) []byte {
+	return argon2.IDKey([]byte(password), salt, uint32(params["iterations"]), uint32(params["memory"]), uint8(params["threads"]), uint32(params["keyLen"]))
 }
 
 func (kld *Kilid) EncryptFile(file string, password string, hint string, deleteSource bool, yesAll bool, onProgress func(int)) error {
@@ -55,58 +70,63 @@ func (kld *Kilid) EncryptFile(file string, password string, hint string, deleteS
 	}
 	defer dst.Close()
 
+	salt, err := generateSalt()
+	if err != nil {
+		return err
+	}
+
 	md.OriginalExtension = filepath.Ext(file)
 	md.PasswordHint = hint
-	md.EncryptedAt = time.Now().Format("2006-01-02 15:04:05")
-	md.KilidVersion = kld.Version
+	md.Date = time.Now().Format("2006-01-02 15:04:05")
+	md.Version = kld.Version
+	md.ArgonParams = kld.ArgonParams
+	md.Salt = hex.EncodeToString(salt)
 
 	b, err := json.Marshal(md)
 	if err != nil {
 		return fmt.Errorf("failed to create metadata: %w", err)
 	}
-	n, err := dst.Write(b)
-	if err != nil || n != len(b) {
+	if _, err := dst.Write(b); err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
-	n, err = dst.Write([]byte("/"))
-	if err != nil || n != 1 {
-		return fmt.Errorf("failed to write metadata seperator: %w", err)
+	if _, err = dst.Write([]byte("/")); err != nil {
+		return fmt.Errorf("failed to write metadata delimiter: %w", err)
 	}
 
-	block, err := aes.NewCipher(generateKey(password))
+	key := deriveKey(password, salt, kld.ArgonParams)
+	block, err := aes.NewCipher(key)
 	if err != nil {
-		return fmt.Errorf("failed to generate block from password: %w", err)
+		return fmt.Errorf("failed to create block: %w", err)
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return fmt.Errorf("failed to generate GCM: %w", err)
+		return fmt.Errorf("failed to create GCM counter: %w", err)
 	}
 
 	buf := make([]byte, ChunkSize)
-
-	myBuf := make([]byte, ChunkSize)
-	dst.Read(myBuf)
 
 	for {
 		n, err := src.Read(buf)
 		if n > 0 {
 			chunk := buf[:n]
 			nonce := make([]byte, gcm.NonceSize())
-			io.ReadFull(rand.Reader, nonce)
+			if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+				return fmt.Errorf("failed to generate nonce: %w", err)
+			}
 
 			ciphertext := gcm.Seal(nil, nonce, chunk, nil)
-			l := uint32(len(ciphertext))
-			binary.Write(dst, binary.LittleEndian, l)
+			if err := binary.Write(dst, binary.LittleEndian, uint32(len(ciphertext))); err != nil {
+				return err
+			}
 
-			n, err := dst.Write(nonce)
-			if err != nil || n != len(nonce) {
+			if _, err := dst.Write(nonce); err != nil {
 				return fmt.Errorf("failed to save nonce: %w", err)
 			}
-			n, err = dst.Write(ciphertext)
-			if err != nil || n != len(ciphertext) {
-				return fmt.Errorf("failed to save chunk: %w", err)
+			if _, err = dst.Write(ciphertext); err != nil {
+				return fmt.Errorf("failed to save ciphertext: %w", err)
 			}
+
 			onProgress(n)
 		}
 		if err == io.EOF {
@@ -139,12 +159,12 @@ func (kld *Kilid) DecryptFile(file string, password string, deleteSource bool, y
 
 	var md MetaData
 	r := bufio.NewReader(src)
-	metadataBytes, err := r.ReadBytes('/')
+	b, err := r.ReadBytes('/')
 	if err != nil {
 		return []error{fmt.Errorf("failed to read metadata: %w", err)}
 	}
-	onProgress(len(metadataBytes))
-	metadataStr := string(metadataBytes)
+	onProgress(len(b))
+	metadataStr := string(b)
 	metadataStr = strings.TrimSuffix(metadataStr, "/")
 
 	if err := json.Unmarshal([]byte(metadataStr), &md); err != nil {
@@ -157,14 +177,19 @@ func (kld *Kilid) DecryptFile(file string, password string, deleteSource bool, y
 	}
 	defer dst.Close()
 
-	block, err := aes.NewCipher(generateKey(password))
+	salt, err := hex.DecodeString(md.Salt)
 	if err != nil {
-		return []error{fmt.Errorf("failed to generate block from password: %w", err)}
+		return []error{fmt.Errorf("failed to convert salt: %w", err)}
+	}
+
+	block, err := aes.NewCipher(deriveKey(password, salt, md.ArgonParams))
+	if err != nil {
+		return []error{fmt.Errorf("failed to create block: %w", err)}
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return []error{fmt.Errorf("failed to create GCM: %w", err)}
+		return []error{fmt.Errorf("failed to create GCM counter: %w", err)}
 	}
 
 	nonceSize := gcm.NonceSize()
@@ -176,7 +201,7 @@ func (kld *Kilid) DecryptFile(file string, password string, deleteSource bool, y
 			break
 		}
 		if err != nil {
-			return []error{fmt.Errorf("failed to read chunk length: %w", err)}
+			return []error{fmt.Errorf("failed to read length: %w", err)}
 		}
 
 		nonce := make([]byte, nonceSize)
@@ -202,7 +227,7 @@ func (kld *Kilid) DecryptFile(file string, password string, deleteSource bool, y
 			return []error{fmt.Errorf("failed to save data: %w", err)}
 		}
 
-		bytesConsumed := 4 + nonceSize + int(length) // I forget to calc overheeads caused: Progress bar deadlock.
+		bytesConsumed := 4 + nonceSize + int(length)
 		onProgress(bytesConsumed)
 	}
 
@@ -247,8 +272,8 @@ func (kld *Kilid) Info(file string, onlyExt bool) (string, error) {
 	fmt.Printf("\n─── File Details: %s ───\n", file)
 	fmt.Printf("%-20s : %s\n", "Original Extension", md.OriginalExtension)
 	fmt.Printf("%-20s : %s\n", "Password Hint", md.PasswordHint)
-	fmt.Printf("%-20s : %s\n", "Encrypted At", md.EncryptedAt)
-	fmt.Printf("%-20s : %v\n", "Kilid Version", md.KilidVersion)
+	fmt.Printf("%-20s : %s\n", "Encrypted At", md.Date)
+	fmt.Printf("%-20s : %v\n", "Kilid Version", md.Version)
 	fmt.Println(strings.Repeat("─", 45))
 	return "", nil
 }

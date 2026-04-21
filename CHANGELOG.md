@@ -28,12 +28,22 @@
 
 ---
 
-## [2.1.0] - 2026-04-19
+## [3.0.0] - 2026-04-20
+
+### Breaking Changes
+
+- **File Compatibility:** Files created with version **2.0.0** or older are no longer supported due to a change in the underlying data structure.
+
+### Security
+
+- Switched to Argon2id (replacing SHA-256) for superior brute-force and rainbow table resistance.
 
 ### Added
 
-- `-v` flag to print Kilid version
+- `version or v` command to display current version.
+- Password confirmation prompt to prevent typos.
+- Added `-wipe` flag for secure file shredding, overwrites data with random bytes to prevent recovery.
 
 ### Fixed
 
-- ?
+- Minor fixes
