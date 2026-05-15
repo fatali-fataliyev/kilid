@@ -49,5 +49,5 @@
 ### Fixed
 
 - Fixed bug causing log erasure.
-- Fixed bug causing appers multiple progress bars.
+- Fixed bug causing appears multiple progress bars.
 - Fixed empty file creation on failed encryption or decryption operations.
