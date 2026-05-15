@@ -44,5 +44,10 @@
 - Password confirmation prompt to prevent typos.
 - Added `-wipe` flag to **Encryption** command for secure file shredding, overwrites original data with random bytes to prevent recovery.
 - Added `-output` flag to **info** command for write info in a file.
+- Added ETA to bars for tracking estimated complete time.
 
 ### Fixed
+
+- Fixed bug causing log erasure.
+- Fixed bug causing the progress bar to freeze.
+- Fixed empty file creation on failed encryption or decryption operations.
