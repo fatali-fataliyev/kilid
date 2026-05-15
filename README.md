@@ -37,7 +37,7 @@ If you have Go installed, run:
 go install github.com/fatali-fataliyev/kilid/v3@latest
 ```
 
-**Note**: Verify by typing `kilid -h`
+**Note**: Verify by typing `kilid version`
 
 #### 2. Pre-compiled Binaries
 
@@ -82,7 +82,7 @@ Kilid Version        : 1.0.0
 
 ### 4. 🪛 Advanced Flags
 
-- **Delete Source (-d, --delete)**: Automatically wipes the source file(Use with caution).
+- **Delete Source (-d, --delete)**: Removes the source file after `enc` or `dec` operation.
 
 ```bash
 # Encrypts and deletes original .txt
@@ -100,6 +100,8 @@ kilid dec secret.kld -y
 ```
 
 - **Source file shredding (-wipe)**: Shreds source files after encryption to prevent restoration via recovery software.
+  <br>
+  **Note**: This operation can take several minutes depending on the <i>file size</i>. If you want to just remove the source file, use the `--delete` flag instead of `-wipe`
 
 ```bash
 kilid enc passwords.txt -wipe
@@ -112,6 +114,7 @@ kilid enc passwords.txt -wipe
 - Replaced SHA256 with Argon2id to prevent brute-force and rainbow table risks.
 - Password confirmation prompt to prevent typos.
 - Added `-wipe` feature to shred source files after **encryption**, preventing data recovery.
+- Modernized progress bar style and added ETA in seconds.
 
 > See [full history](./CHANGELOG.md)
 
@@ -134,3 +137,5 @@ kilid enc passwords.txt -wipe
 ## ❤️ Special Thanks
 
 Big thanks to [Sanan R. Fataliyev](https://github.com/sanan-fataliyev) for the architectural design help!
+
+/// Todo: Graceful shutdown, close half enc/dec files.

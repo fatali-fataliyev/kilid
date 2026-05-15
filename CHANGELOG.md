@@ -43,7 +43,6 @@
 - `version or v` command to display current version.
 - Password confirmation prompt to prevent typos.
 - Added `-wipe` flag to **Encryption** command for secure file shredding, overwrites original data with random bytes to prevent recovery.
+- Added `-output` flag to **info** command for write info in a file.
 
 ### Fixed
-
-- Minor fixes

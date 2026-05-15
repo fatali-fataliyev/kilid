@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/fatali-fataliyev/kilid/v3/commands"
-	"github.com/fatali-fataliyev/kilid/v3/config"
 	"github.com/fatali-fataliyev/kilid/v3/engine"
 )
 
@@ -19,13 +18,7 @@ var version string
 func main() {
 	fmt.Println("KLD v" + strings.TrimSpace(version))
 
-	cfg, err := config.Load()
-	if err != nil {
-		slog.Error("failed to load argon config", "error", err.Error())
-		return
-	}
-
-	kld := engine.NewKilid(version, cfg)
+	kld := engine.NewKilid(version)
 
 	cmd := commands.Init(kld)
 
