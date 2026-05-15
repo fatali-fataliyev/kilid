@@ -31,9 +31,11 @@ func HandleEncryption(kld *engine.Kilid, files []string, password string, hint s
 		return fmt.Errorf("no files to encrypt")
 	}
 
-	var p *mpb.Progress
 	var wg sync.WaitGroup
 	var failContainer failCounter
+
+	p := mpb.New(mpb.WithWaitGroup(&wg), mpb.WithWidth(60))
+	wg.Add(len(ff))
 
 	for _, f := range ff {
 		var cancel bool
@@ -57,17 +59,26 @@ func HandleEncryption(kld *engine.Kilid, files []string, password string, hint s
 			continue
 		}
 
-		p = mpb.New(mpb.WithWidth(60))
-		info, _ := os.Stat(f)
-		bar := p.New(int64(info.Size()),
-			mpb.BarStyle().Lbound("╢").Filler("▌").Tip("▌").Padding("░").Rbound("╟"),
-			mpb.PrependDecorators(
-				decor.Name(f, decor.WC{C: decor.DindentRight | decor.DextraSpace}),
-				decor.OnComplete(decor.AverageETA(decor.ET_STYLE_GO), "done √"),
-			),
-			mpb.AppendDecorators(decor.Percentage()))
+		info, err := os.Stat(f)
+		if err != nil {
+			return fmt.Errorf("failed to get file info: %w", err)
+		}
 
-		wg.Add(1)
+		bar := p.New(int64(info.Size()),
+			mpb.BarStyle().Lbound("[").Filler("•").Tip("•").Padding(".").Rbound("]"),
+
+			mpb.PrependDecorators(
+				decor.Name(f),
+				decor.Percentage(decor.WCSyncSpace),
+			),
+
+			mpb.AppendDecorators(
+				decor.OnComplete(
+					decor.AverageETA(decor.ET_STYLE_GO, decor.WCSyncWidth), "DONE √",
+				),
+			),
+		)
+
 		go func(file string, b *mpb.Bar) {
 			defer wg.Done()
 
@@ -85,49 +96,12 @@ func HandleEncryption(kld *engine.Kilid, files []string, password string, hint s
 		}(f, bar)
 	}
 
-	wg.Wait()
-	if p != nil {
-		p.Wait()
-	}
+	p.Wait()
 
 	summarizeEncResults(len(ff), failContainer.fails)
 	// HandleWiping(kld, files)
 
 	return nil
-}
-
-func summarizeEncResults(filesLen int, fails []error) {
-	if len(fails) > 0 {
-		fmt.Println()
-		slog.Error(fmt.Sprintf("Fails(fail/total): %d / %d", len(fails), filesLen))
-		fmt.Println()
-		fmt.Print(strings.Repeat("─", 20))
-		fmt.Print("[ Failures ]")
-		fmt.Print(strings.Repeat("─", 20))
-		fmt.Println("\n")
-
-		for _, err := range fails {
-			slog.Error(err.Error())
-		}
-		return
-	}
-
-	if filesLen == 1 {
-		slog.Info("file encrypted successfully")
-		return
-	}
-	slog.Info(fmt.Sprintf("All (%d) files encrypted successfully", filesLen))
-}
-
-func ensureFileExist(file string) bool {
-	_, err := os.Stat(file)
-	if err == nil {
-		return true
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		return false
-	}
-	return false
 }
 
 func HandleWiping(kld *engine.Kilid, files []string) {
@@ -149,9 +123,11 @@ func HandleDecryption(kld *engine.Kilid, files []string, password string, delete
 		return fmt.Errorf("no files to decrypt")
 	}
 
-	var p *mpb.Progress
-	var failContainer failCounter
 	var wg sync.WaitGroup
+	var failContainer failCounter
+
+	p := mpb.New(mpb.WithWaitGroup(&wg), mpb.WithWidth(60))
+	wg.Add(len(ff))
 
 	for _, f := range ff {
 		var extGetfail error
@@ -184,17 +160,26 @@ func HandleDecryption(kld *engine.Kilid, files []string, password string, delete
 			return fmt.Errorf("failed to get original file extension: %w", extGetfail)
 		}
 
-		p = mpb.New(mpb.WithWidth(60))
-		info, _ := os.Stat(f)
-		bar := p.New(int64(info.Size()),
-			mpb.BarStyle().Lbound("╢").Filler("▌").Tip("▌").Padding("░").Rbound("╟"),
-			mpb.PrependDecorators(
-				decor.Name(f, decor.WC{C: decor.DindentRight | decor.DextraSpace}),
-				decor.OnComplete(decor.AverageETA(decor.ET_STYLE_GO), "done √"),
-			),
-			mpb.AppendDecorators(decor.Percentage()))
+		info, err := os.Stat(f)
+		if err != nil {
+			return fmt.Errorf("failed to get file info: %w", err)
+		}
 
-		wg.Add(1)
+		bar := p.New(int64(info.Size()),
+			mpb.BarStyle().Lbound("[").Filler("•").Tip("•").Padding(".").Rbound("]"),
+
+			mpb.PrependDecorators(
+				decor.Name(f),
+				decor.Percentage(decor.WCSyncSpace),
+			),
+
+			mpb.AppendDecorators(
+				decor.OnComplete(
+					decor.AverageETA(decor.ET_STYLE_GO, decor.WCSyncWidth), "DONE √",
+				),
+			),
+		)
+
 		go func(file string, b *mpb.Bar) {
 			defer wg.Done()
 
@@ -218,37 +203,11 @@ func HandleDecryption(kld *engine.Kilid, files []string, password string, delete
 		}(f, bar)
 	}
 
-	wg.Wait()
-	if p != nil {
-		p.Wait()
-	}
+	p.Wait()
 
 	summarizeDecResults(len(ff), failContainer.fails)
 
 	return nil
-}
-
-func summarizeDecResults(filesLen int, fails []error) {
-	if len(fails) > 0 {
-		fmt.Println()
-		slog.Error(fmt.Sprintf("Fails(fail/total): %d / %d", len(fails), filesLen))
-		fmt.Println()
-		fmt.Print(strings.Repeat("─", 20))
-		fmt.Print("[ Failures ]")
-		fmt.Print(strings.Repeat("─", 20))
-		fmt.Println("\n")
-
-		for _, err := range fails {
-			slog.Error(err.Error())
-		}
-		return
-	}
-
-	if filesLen == 1 {
-		slog.Info("file decrypted successfully")
-		return
-	}
-	slog.Info(fmt.Sprintf("All (%d) files decrypted successfully", filesLen))
 }
 
 func HandleInfo(kld *engine.Kilid, files []string, output *string) error {
@@ -365,4 +324,61 @@ func isFileExistsAlready(fileName string) bool {
 		return true
 	}
 	return false
+}
+
+func summarizeEncResults(filesLen int, fails []error) {
+	if len(fails) > 0 {
+		fmt.Println()
+		slog.Error(fmt.Sprintf("Fails(fail/total): %d / %d", len(fails), filesLen))
+		fmt.Println()
+		fmt.Print(strings.Repeat("─", 20))
+		fmt.Print("[ Failures ]")
+		fmt.Print(strings.Repeat("─", 20))
+		fmt.Println("\n")
+
+		for _, err := range fails {
+			slog.Error(err.Error())
+		}
+		return
+	}
+
+	if filesLen == 1 {
+		slog.Info("file encrypted successfully")
+		return
+	}
+	slog.Info(fmt.Sprintf("All (%d) files encrypted successfully", filesLen))
+}
+
+func ensureFileExist(file string) bool {
+	_, err := os.Stat(file)
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	return false
+}
+
+func summarizeDecResults(filesLen int, fails []error) {
+	if len(fails) > 0 {
+		fmt.Println()
+		slog.Error(fmt.Sprintf("Fails(fail/total): %d / %d", len(fails), filesLen))
+		fmt.Println()
+		fmt.Print(strings.Repeat("─", 20))
+		fmt.Print("[ Failures ]")
+		fmt.Print(strings.Repeat("─", 20))
+		fmt.Println("\n")
+
+		for _, err := range fails {
+			slog.Error(err.Error())
+		}
+		return
+	}
+
+	if filesLen == 1 {
+		slog.Info("file decrypted successfully")
+		return
+	}
+	slog.Info(fmt.Sprintf("All (%d) files decrypted successfully", filesLen))
 }
