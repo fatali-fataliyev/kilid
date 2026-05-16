@@ -45,6 +45,7 @@
 - Added `-wipe` flag to **Encryption** command for secure file shredding, overwrites original data with random bytes to prevent recovery.
 - Added `-output` flag to **info** command for write info in a file.
 - Added ETA to bars for tracking estimated complete time.
+- Added graceful shutdown feature to prevent incomplete encryption decryption process.
 
 ### Fixed
 

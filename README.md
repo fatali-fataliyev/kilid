@@ -99,9 +99,9 @@ kilid dec passwords.kld -d
 kilid dec secret.kld -y
 ```
 
-- **Source file shredding (-wipe)**: Shreds source files after encryption to prevent restoration via recovery software.
-  <br>
-  **Note**: This operation can take several minutes depending on the <i>file size</i>. If you want to just remove the source file, use the `--delete` flag instead of `-wipe`
+- **Source file wipe (-wipe)**: Wipes source files after encryption to prevent restoration via recovery software.
+  <i>
+  **Note**: This operation can take several minutes depending on the file size</i>. If you want to just remove the source file, use the `--delete` flag instead of `-wipe`
 
 ```bash
 kilid enc passwords.txt -wipe
@@ -115,6 +115,7 @@ kilid enc passwords.txt -wipe
 - Password confirmation prompt to prevent typos.
 - Added `-wipe` feature to shred source files after **encryption**, preventing data recovery.
 - Modernized progress bar style and added ETA in seconds.
+- Graceful shutdown prevents incomplete encryption/decryption processes
 
 > See [full history](./CHANGELOG.md)
 

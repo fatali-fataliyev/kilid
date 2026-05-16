@@ -12,11 +12,6 @@ import (
 	"golang.org/x/term"
 )
 
-// TODO:
-// 		1. Infos should be write to a file via `-output` flag and user can be provide custom path and file name like this: /path/to/my/file.txt
-// 		2. Wipe functionality, should support go routines, like enc and dec commands.
-// 		3. Update Go.mod, changelog, readme, build.sh (change to kilid not kld), thats it for now.
-
 func Init(kld *engine.Kilid) *cli.Command {
 	app := &cli.Command{
 		Name:  "kilid",
@@ -148,13 +143,7 @@ func Init(kld *engine.Kilid) *cli.Command {
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.IsSet("output") {
-						fmt.Println("FROM FLAG")
-						output := cmd.StringArg("output")
-						fmt.Println("output is SET, value: ", output)
-						fmt.Println(&output)
-						adr := &output
-						fmt.Println("value of addr", adr, "is: ", *adr)
-						os.Exit(1)
+						output := cmd.String("output")
 						return handlers.HandleInfo(kld, cmd.StringArgs("files"), &output)
 					}
 					return handlers.HandleInfo(kld, cmd.StringArgs("files"), nil)

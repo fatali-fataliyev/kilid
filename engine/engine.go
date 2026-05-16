@@ -264,7 +264,7 @@ func (kld *Kilid) WipeFile(file string, onProgress func(int)) error {
 			}
 
 			totalProcessed += int64(n)
-			// onProgress(int(totalProcessed))
+			onProgress(n)
 		}
 		if err == io.EOF {
 			break
@@ -273,7 +273,9 @@ func (kld *Kilid) WipeFile(file string, onProgress func(int)) error {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
 	}
-
+	if err := os.Remove(file); err != nil {
+		return fmt.Errorf("failed to remove file after wiping: %w", err)
+	}
 	return nil
 }
 
