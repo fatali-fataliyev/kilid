@@ -44,11 +44,15 @@
 - Password confirmation prompt to prevent typos.
 - Added `-wipe` flag to **Encryption** command for secure file shredding, overwrites original data with random bytes to prevent recovery.
 - Added `-output` flag to **info** command for write info in a file.
-- Added ETA to bars for tracking estimated complete time.
-- Added graceful cancellation feature to prevent incomplete encryption decryption process.
+- Added ETA to the bars for tracking estimated time to complete.
+- Added graceful cancellation feature to prevent incompleted encryption/decryption process.
 
 ### Fixed
 
 - Fixed bug causing log erasure.
 - Fixed bug causing appears multiple progress bars.
 - Fixed empty file creation on failed encryption or decryption operations.
+
+### UI
+
+- Changed UI fillers to be compatible with <i>ASCII</i> characters to avoid unknown characters in the terminal.

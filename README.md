@@ -10,7 +10,7 @@
 
 ### 🚀 Key Features
 
-- **Encryption:** Kilid using strong <i>AES</i> encryption for maximum security.
+- **Encryption:** Kilid using strong <strong><i>AES-256</i></strong> encryption for maximum security.
 - **Transparency:** Kilid never see or store your password. Only you know.
 - **Hint:** Integrated password hints to prevent accidental password forget.
 - **Privacy:** 100% local execution, Everything stays on your machine.
@@ -114,7 +114,7 @@ kilid enc passwords.txt -wipe
 - Replaced SHA256 with Argon2id to prevent brute-force and rainbow table risks.
 - Password confirmation prompt to prevent typos.
 - Added `-wipe` feature to shred source files after **encryption**, preventing data recovery.
-- Modernized progress bar style and added ETA in seconds.
+- Modernized progress bar style and added ETA.
 - Graceful cancellation prevents incomplete encryption/decryption processes
 
 > See [full history](./CHANGELOG.md)
