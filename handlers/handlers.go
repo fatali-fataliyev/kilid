@@ -110,13 +110,13 @@ func HandleEncryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 	summarizeEncResults(len(ff), failContainer.fails)
 
 	if wipeSrc {
-		HandleWiping(kld, ff)
+		HandleWiping(ctx, kld, ff)
 	}
 
 	return nil
 }
 
-func HandleWiping(kld *engine.Kilid, files []string) {
+func HandleWiping(ctx context.Context, kld *engine.Kilid, files []string) {
 	fmt.Println()
 	bannerWidth := 45
 	text := " === [ WIPING... ] === "
@@ -129,10 +129,16 @@ func HandleWiping(kld *engine.Kilid, files []string) {
 	var wg sync.WaitGroup
 	var failContainer failCounter
 
-	p := mpb.New(mpb.WithWaitGroup(&wg), mpb.WithWidth(64))
+	p := mpb.NewWithContext(ctx, mpb.WithWaitGroup(&wg), mpb.WithWidth(64))
+
 	wg.Add(len(files))
 
 	for _, f := range files {
+
+		if ctx.Err() != nil {
+			return
+		}
+
 		info, err := os.Stat(f)
 		if err != nil {
 			failContainer.AddFail(fmt.Errorf("failed to get file info: %w", err))
@@ -155,13 +161,13 @@ func HandleWiping(kld *engine.Kilid, files []string) {
 			),
 		)
 
-		go func(file string, b *mpb.Bar) {
+		go func(ctx context.Context, file string, b *mpb.Bar) {
 			defer wg.Done()
-			if err := kld.WipeFile(file, func(n int) { b.IncrBy(n) }); err != nil {
+			if err := kld.WipeFile(ctx, file, func(n int) { b.IncrBy(n) }); err != nil {
 				b.Abort(true)
 				failContainer.AddFail(fmt.Errorf("failed to wipe %q: %w", file, err))
 			}
-		}(f, bar)
+		}(ctx, f, bar)
 	}
 
 	p.Wait()
@@ -271,7 +277,7 @@ func HandleDecryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 	return nil
 }
 
-func HandleInfo(kld *engine.Kilid, files []string, output *string) error {
+func HandleInfo(ctx context.Context, kld *engine.Kilid, files []string, output *string) error {
 	ff := resolveFiles(files)
 
 	if len(ff) == 0 {
@@ -294,10 +300,16 @@ func HandleInfo(kld *engine.Kilid, files []string, output *string) error {
 			return fmt.Errorf("failed to open file: %w", err)
 		}
 		outputSrc = src
+
+		defer outputSrc.Close()
 	}
 
 	c := 1
 	for _, f := range ff {
+		if ctx.Err() != nil {
+			return fmt.Errorf("operation cancelled")
+		}
+
 		info, err := kld.Info(f)
 		if err != nil {
 			slog.Error("failed to print file info", "error", err)
@@ -312,6 +324,7 @@ func HandleInfo(kld *engine.Kilid, files []string, output *string) error {
 		fmt.Println(strings.Repeat("─", 45))
 
 		if outputSrc != nil {
+
 			var data string
 
 			data = fmt.Sprintf("\n─── File Details: %s ───\n", f)
@@ -347,8 +360,6 @@ func HandleInfo(kld *engine.Kilid, files []string, output *string) error {
 			if _, err := outputSrc.Write([]byte("\n")); err != nil {
 				return fmt.Errorf("failed to save file (%s) info: %w", f, err)
 			}
-
-			outputSrc.Close()
 		}
 
 		fmt.Printf("\n Progress: [%d/%d] (%.0f%%) \n\n", c, len(ff), (float64(c) / float64(len(ff)) * 100))

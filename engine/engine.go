@@ -244,7 +244,7 @@ func (kld *Kilid) DecryptFile(ctx context.Context, file string, password string,
 	return nil
 }
 
-func (kld *Kilid) WipeFile(file string, onProgress func(int)) error {
+func (kld *Kilid) WipeFile(ctx context.Context, file string, onProgress func(int)) error {
 	src, err := os.OpenFile(file, os.O_RDWR, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
@@ -261,6 +261,11 @@ func (kld *Kilid) WipeFile(file string, onProgress func(int)) error {
 	var totalProcessed int64
 
 	for totalProcessed < fileSize {
+
+		if ctx.Err() != nil {
+			return fmt.Errorf("operation cancelled")
+		}
+
 		n, err := src.Read(buf)
 		if n > 0 {
 			scrambledData := make([]byte, n)

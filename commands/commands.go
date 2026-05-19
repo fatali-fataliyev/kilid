@@ -144,9 +144,9 @@ func Init(ctx context.Context, kld *engine.Kilid) *cli.Command {
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.IsSet("output") {
 						output := cmd.String("output")
-						return handlers.HandleInfo(kld, cmd.StringArgs("files"), &output)
+						return handlers.HandleInfo(ctx, kld, cmd.StringArgs("files"), &output)
 					}
-					return handlers.HandleInfo(kld, cmd.StringArgs("files"), nil)
+					return handlers.HandleInfo(ctx, kld, cmd.StringArgs("files"), nil)
 				},
 			},
 
