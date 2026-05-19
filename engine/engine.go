@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bufio"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -22,20 +23,20 @@ type Kilid struct {
 	Version string
 }
 
-const ChunkSize = 1024 * 1024 // 1MB
-
-func NewKilid(v string) *Kilid {
-	return &Kilid{
-		Version: v,
-	}
-}
-
 type MetaData struct {
 	OriginalExtension string `json:"ext"`
 	PasswordHint      string `json:"hint"`
 	Date              string `json:"date"`
 	Version           string `json:"version"`
 	Salt              string `json:"salt"`
+}
+
+const ChunkSize = 1024 * 1024 // 1MB
+
+func NewKilid(v string) *Kilid {
+	return &Kilid{
+		Version: v,
+	}
 }
 
 func generateSalt() ([]byte, error) {
@@ -50,7 +51,7 @@ func deriveKey(password string, salt []byte) []byte {
 	return argon2.IDKey([]byte(password), salt, 4, 256*1024, 4, 32)
 }
 
-func (kld *Kilid) EncryptFile(file string, password string, hint string, deleteSource bool, yesAll bool, onProgress func(int)) error {
+func (kld *Kilid) EncryptFile(ctx context.Context, file string, password string, hint string, deleteSource bool, yesAll bool, onProgress func(int)) error {
 	var md MetaData
 
 	src, err := os.Open(file)
@@ -59,7 +60,8 @@ func (kld *Kilid) EncryptFile(file string, password string, hint string, deleteS
 	}
 	defer src.Close()
 
-	dst, err := os.Create(kld.GetFileName(file) + ".kld")
+	processingFile := kld.GetFileName(file) + ".kld"
+	dst, err := os.Create(processingFile)
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
@@ -101,6 +103,11 @@ func (kld *Kilid) EncryptFile(file string, password string, hint string, deleteS
 	buf := make([]byte, ChunkSize)
 
 	for {
+
+		if ctx.Err() != nil {
+			return fmt.Errorf("operation cancelled")
+		}
+
 		n, err := src.Read(buf)
 		if n > 0 {
 			chunk := buf[:n]
@@ -140,7 +147,7 @@ func (kld *Kilid) EncryptFile(file string, password string, hint string, deleteS
 	return nil
 }
 
-func (kld *Kilid) DecryptFile(file string, password string, deleteSource bool, yesAll bool, onProgress func(int)) error {
+func (kld *Kilid) DecryptFile(ctx context.Context, file string, password string, deleteSource bool, yesAll bool, onProgress func(int)) error {
 	if filepath.Ext(file) != ".kld" {
 		return fmt.Errorf("only .kld files can be decrypted")
 	}
@@ -165,7 +172,8 @@ func (kld *Kilid) DecryptFile(file string, password string, deleteSource bool, y
 		return fmt.Errorf("failed to parse metadata: %w", err)
 	}
 
-	dst, err := os.Create(kld.GetFileName(file) + md.OriginalExtension)
+	processingFile := kld.GetFileName(file) + md.OriginalExtension
+	dst, err := os.Create(processingFile)
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
@@ -189,6 +197,11 @@ func (kld *Kilid) DecryptFile(file string, password string, deleteSource bool, y
 	nonceSize := gcm.NonceSize()
 
 	for {
+
+		if ctx.Err() != nil {
+			return fmt.Errorf("operation cancelled")
+		}
+
 		var length uint32
 		err := binary.Read(r, binary.LittleEndian, &length)
 		if err == io.EOF {

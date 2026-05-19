@@ -12,7 +12,7 @@ import (
 	"golang.org/x/term"
 )
 
-func Init(kld *engine.Kilid) *cli.Command {
+func Init(ctx context.Context, kld *engine.Kilid) *cli.Command {
 	app := &cli.Command{
 		Name:  "kilid",
 		Usage: "Encrypt & Decrypt your files with Kilid.",
@@ -80,7 +80,7 @@ func Init(kld *engine.Kilid) *cli.Command {
 					scanner.Scan()
 					hint = scanner.Text()
 					fmt.Println()
-					return handlers.HandleEncryption(kld, files, password, hint, wipeSrc, deleteSrc, yesAll)
+					return handlers.HandleEncryption(ctx, kld, files, password, hint, wipeSrc, deleteSrc, yesAll)
 				},
 			},
 
@@ -120,7 +120,7 @@ func Init(kld *engine.Kilid) *cli.Command {
 					}
 					password = string(bytePassword)
 					fmt.Println()
-					return handlers.HandleDecryption(kld, files, password, deleteSrc, yesAll)
+					return handlers.HandleDecryption(ctx, kld, files, password, deleteSrc, yesAll)
 				},
 			},
 

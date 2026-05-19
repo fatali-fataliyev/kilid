@@ -115,7 +115,7 @@ kilid enc passwords.txt -wipe
 - Password confirmation prompt to prevent typos.
 - Added `-wipe` feature to shred source files after **encryption**, preventing data recovery.
 - Modernized progress bar style and added ETA in seconds.
-- Graceful shutdown prevents incomplete encryption/decryption processes
+- Graceful cancellation prevents incomplete encryption/decryption processes
 
 > See [full history](./CHANGELOG.md)
 
@@ -138,5 +138,3 @@ kilid enc passwords.txt -wipe
 ## ❤️ Special Thanks
 
 Big thanks to [Sanan R. Fataliyev](https://github.com/sanan-fataliyev) for the architectural design help!
-
-/// Todo: Graceful shutdown, close half enc/dec files.

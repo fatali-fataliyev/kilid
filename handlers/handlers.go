@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -25,7 +26,7 @@ func (c *failCounter) AddFail(fail error) {
 	c.fails = append(c.fails, fail)
 }
 
-func HandleEncryption(kld *engine.Kilid, files []string, password string, hint string, wipeSrc bool, deleteSrc bool, yesAll bool) error {
+func HandleEncryption(ctx context.Context, kld *engine.Kilid, files []string, password string, hint string, wipeSrc bool, deleteSrc bool, yesAll bool) error {
 	ff := resolveFiles(files)
 	if len(ff) == 0 {
 		return fmt.Errorf("no files to encrypt")
@@ -80,21 +81,28 @@ func HandleEncryption(kld *engine.Kilid, files []string, password string, hint s
 			),
 		)
 
-		go func(file string, b *mpb.Bar) {
+		go func(ctx context.Context, file string, b *mpb.Bar) {
 			defer wg.Done()
 
-			if err := kld.EncryptFile(file, password, hint, deleteSrc, yesAll, func(n int) { b.IncrBy(n) }); err != nil {
-				failContainer.AddFail(fmt.Errorf("Encryption failed: file: %q | error: %w", file, err))
-				defer b.Abort(true)
+			if ctx.Err() != nil {
+				return
+			}
 
-				fileName := kld.GetFileName(file) + ".kld"
-				if ensureFileExist(fileName) {
-					if err := os.Remove(fileName); err != nil {
-						failContainer.AddFail(fmt.Errorf("failed to remove unsuccessful encryption file: %q | error: %w", file, err))
+			{
+				if err := kld.EncryptFile(ctx, file, password, hint, deleteSrc, yesAll, func(n int) { b.IncrBy(n) }); err != nil {
+					failContainer.AddFail(fmt.Errorf("Encryption failed: file: %q | error: %w", file, err))
+					b.Abort(true)
+
+					fileName := kld.GetFileName(file) + ".kld"
+					if ensureFileExist(fileName) {
+						if err := os.Remove(fileName); err != nil {
+							failContainer.AddFail(fmt.Errorf("failed to remove unsuccessful encryption file: %q | error: %w", file, err))
+						}
 					}
 				}
 			}
-		}(f, bar)
+
+		}(ctx, f, bar)
 	}
 
 	p.Wait()
@@ -128,6 +136,7 @@ func HandleWiping(kld *engine.Kilid, files []string) {
 		info, err := os.Stat(f)
 		if err != nil {
 			failContainer.AddFail(fmt.Errorf("failed to get file info: %w", err))
+			wg.Done()
 			continue
 		}
 
@@ -149,7 +158,7 @@ func HandleWiping(kld *engine.Kilid, files []string) {
 		go func(file string, b *mpb.Bar) {
 			defer wg.Done()
 			if err := kld.WipeFile(file, func(n int) { b.IncrBy(n) }); err != nil {
-				defer b.Abort(true)
+				b.Abort(true)
 				failContainer.AddFail(fmt.Errorf("failed to wipe %q: %w", file, err))
 			}
 		}(f, bar)
@@ -160,7 +169,7 @@ func HandleWiping(kld *engine.Kilid, files []string) {
 	summarizeWipeResults(len(files), failContainer.fails)
 }
 
-func HandleDecryption(kld *engine.Kilid, files []string, password string, deleteSource bool, yesAll bool) error {
+func HandleDecryption(ctx context.Context, kld *engine.Kilid, files []string, password string, deleteSource bool, yesAll bool) error {
 	ff := resolveFiles(files)
 	if len(ff) == 0 {
 		return fmt.Errorf("no files to decrypt")
@@ -169,7 +178,8 @@ func HandleDecryption(kld *engine.Kilid, files []string, password string, delete
 	var wg sync.WaitGroup
 	var failContainer failCounter
 
-	p := mpb.New(mpb.WithWaitGroup(&wg), mpb.WithWidth(60))
+	p := mpb.NewWithContext(ctx, mpb.WithWaitGroup(&wg), mpb.WithWidth(60))
+
 	wg.Add(len(ff))
 
 	for _, f := range ff {
@@ -207,6 +217,7 @@ func HandleDecryption(kld *engine.Kilid, files []string, password string, delete
 		info, err := os.Stat(f)
 		if err != nil {
 			slog.Error("failed to get file info", "file", f, "error", err)
+			wg.Done()
 			continue
 		}
 
@@ -225,12 +236,17 @@ func HandleDecryption(kld *engine.Kilid, files []string, password string, delete
 			),
 		)
 
-		go func(file string, b *mpb.Bar) {
+		go func(ctx context.Context, file string, b *mpb.Bar) {
 			defer wg.Done()
 
-			if err := kld.DecryptFile(file, password, deleteSource, yesAll, func(n int) { b.IncrBy(n) }); err != nil {
+			if ctx.Err() != nil {
+				b.Abort(true)
+				return
+			}
+
+			if err := kld.DecryptFile(ctx, file, password, deleteSource, yesAll, func(n int) { b.IncrBy(n) }); err != nil {
 				failContainer.AddFail(fmt.Errorf("Decryption failed: file: %q | error: %w", file, err))
-				defer b.Abort(true)
+				b.Abort(true)
 
 				ext, extErr := kld.GetFileRealExt(file)
 				if extErr != nil {
@@ -245,7 +261,7 @@ func HandleDecryption(kld *engine.Kilid, files []string, password string, delete
 					}
 				}
 			}
-		}(f, bar)
+		}(ctx, f, bar)
 	}
 
 	p.Wait()
@@ -382,6 +398,17 @@ func isFileExistsAlready(fileName string) bool {
 	return false
 }
 
+func ensureFileExist(file string) bool {
+	_, err := os.Stat(file)
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	return false
+}
+
 func summarizeEncResults(filesLen int, fails []error) {
 	if len(fails) > 0 {
 		fmt.Println()
@@ -403,17 +430,6 @@ func summarizeEncResults(filesLen int, fails []error) {
 		return
 	}
 	slog.Info(fmt.Sprintf("all (%d) files encrypted successfully", filesLen))
-}
-
-func ensureFileExist(file string) bool {
-	_, err := os.Stat(file)
-	if err == nil {
-		return true
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		return false
-	}
-	return false
 }
 
 func summarizeDecResults(filesLen int, fails []error) {
