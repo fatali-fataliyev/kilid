@@ -45,10 +45,10 @@ func HandleEncryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 				return
 			}
 
-			f := kld.GetFileName(f) + ".kld"
-			if isFileExistsAlready(f) {
+			fName := kld.GetFileName(f) + ".kld"
+			if isFileExistsAlready(fName) {
 				fmt.Println()
-				slog.Warn(fmt.Sprintf("%q already exists, overwrite? [y/n]", f))
+				slog.Warn(fmt.Sprintf("%q already exists, overwrite? [y/n]", fName))
 				answer := askYN()
 				if answer == "y" {
 					return
@@ -57,12 +57,14 @@ func HandleEncryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 			}
 		}()
 		if cancel {
+			wg.Done()
 			continue
 		}
 
 		info, err := os.Stat(f)
 		if err != nil {
 			slog.Error("failed to get file info", "file", f, "error", err)
+			wg.Done()
 			continue
 		}
 
@@ -88,16 +90,14 @@ func HandleEncryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 				return
 			}
 
-			{
-				if err := kld.EncryptFile(ctx, file, password, hint, deleteSrc, yesAll, func(n int) { b.IncrBy(n) }); err != nil {
-					failContainer.AddFail(fmt.Errorf("Encryption failed: file: %q | error: %w", file, err))
-					b.Abort(true)
+			if err := kld.EncryptFile(ctx, file, password, hint, deleteSrc, yesAll, func(n int) { b.IncrBy(n) }); err != nil {
+				failContainer.AddFail(fmt.Errorf("Encryption failed: file: %q | error: %w", file, err))
+				b.Abort(true)
 
-					fileName := kld.GetFileName(file) + ".kld"
-					if ensureFileExist(fileName) {
-						if err := os.Remove(fileName); err != nil {
-							failContainer.AddFail(fmt.Errorf("failed to remove unsuccessful encryption file: %q | error: %w", file, err))
-						}
+				fileName := kld.GetFileName(file) + ".kld"
+				if ensureFileExist(fileName) {
+					if err := os.Remove(fileName); err != nil {
+						failContainer.AddFail(fmt.Errorf("failed to remove unsuccessful encryption file: %q | error: %w", file, err))
 					}
 				}
 			}
@@ -117,6 +117,11 @@ func HandleEncryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 }
 
 func HandleWiping(ctx context.Context, kld *engine.Kilid, files []string) {
+
+	if ctx.Err() != nil {
+		return
+	}
+
 	fmt.Println()
 	bannerWidth := 45
 	text := " === [ WIPING... ] === "
@@ -163,7 +168,8 @@ func HandleWiping(ctx context.Context, kld *engine.Kilid, files []string) {
 
 		go func(ctx context.Context, file string, b *mpb.Bar) {
 			defer wg.Done()
-			if err := kld.WipeFile(ctx, file, func(n int) { b.IncrBy(n) }); err != nil {
+
+			if kld.WipeFile(ctx, file, func(n int) { b.IncrBy(n) }); err != nil {
 				b.Abort(true)
 				failContainer.AddFail(fmt.Errorf("failed to wipe %q: %w", file, err))
 			}
@@ -195,15 +201,17 @@ func HandleDecryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 			if yesAll {
 				return
 			}
+
 			ext, err := kld.GetFileRealExt(f)
 			if err != nil {
 				extGetfail = err
 				return
 			}
-			f := kld.GetFileName(f) + ext
-			if isFileExistsAlready(f) {
+
+			fName := kld.GetFileName(f) + ext
+			if isFileExistsAlready(fName) {
 				fmt.Println()
-				slog.Warn(fmt.Sprintf("%q already exists, overwrite? [y/n]", f))
+				slog.Warn(fmt.Sprintf("%q already exists, overwrite? [y/n]", fName))
 				answer := askYN()
 				if answer == "y" {
 					return
@@ -213,6 +221,7 @@ func HandleDecryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 		}()
 
 		if cancel {
+			wg.Done()
 			continue
 		}
 		if extGetfail != nil {
@@ -250,7 +259,7 @@ func HandleDecryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 				return
 			}
 
-			if err := kld.DecryptFile(ctx, file, password, deleteSource, yesAll, func(n int) { b.IncrBy(n) }); err != nil {
+			if kld.DecryptFile(ctx, file, password, deleteSource, yesAll, func(n int) { b.IncrBy(n) }); err != nil {
 				failContainer.AddFail(fmt.Errorf("Decryption failed: file: %q | error: %w", file, err))
 				b.Abort(true)
 

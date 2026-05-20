@@ -56,3 +56,11 @@
 ### UI
 
 - Changed UI fillers to be compatible with <i>ASCII</i> characters to avoid unknown characters in the terminal.
+
+## [3.0.1] - 2026-05-20
+
+### Fixed
+
+- Fixed a bug that appears in Windows platform, which do not remove incomplete files after a failure.
+- Fixed a bug where Ctrl+C termination triggered a false "WIPING..." log statement even set.
+- Fixed a bug where cancelling the overwrite prompt caused the screen to freeze.

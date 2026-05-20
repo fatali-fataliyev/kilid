@@ -139,6 +139,8 @@ func (kld *Kilid) EncryptFile(ctx context.Context, file string, password string,
 	}
 
 	if deleteSource {
+		dst.Close()
+		src.Close()
 		if err := deleteSourceFile(file); err != nil {
 			return err
 		}
@@ -236,6 +238,8 @@ func (kld *Kilid) DecryptFile(ctx context.Context, file string, password string,
 	}
 
 	if deleteSource {
+		dst.Close()
+		src.Close()
 		if err := deleteSourceFile(file); err != nil {
 			return err
 		}
@@ -249,7 +253,6 @@ func (kld *Kilid) WipeFile(ctx context.Context, file string, onProgress func(int
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
-	defer src.Close()
 
 	stats, err := src.Stat()
 	if err != nil {
@@ -291,6 +294,8 @@ func (kld *Kilid) WipeFile(ctx context.Context, file string, onProgress func(int
 			return fmt.Errorf("failed to read file: %w", err)
 		}
 	}
+
+	src.Close()
 	if err := os.Remove(file); err != nil {
 		return fmt.Errorf("failed to remove file after wiping: %w", err)
 	}
