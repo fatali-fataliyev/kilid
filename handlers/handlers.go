@@ -27,7 +27,10 @@ func (c *failCounter) AddFail(fail error) {
 }
 
 func HandleEncryption(ctx context.Context, kld *engine.Kilid, files []string, password string, hint string, wipeSrc bool, deleteSrc bool, yesAll bool) error {
-	ff := resolveFiles(files)
+	ff, err := resolveFiles(kld, files, "enc", yesAll)
+	if err != nil {
+		return fmt.Errorf("failed to resolve files: %w", err)
+	}
 	if len(ff) == 0 {
 		return fmt.Errorf("no files to encrypt")
 	}
@@ -39,28 +42,6 @@ func HandleEncryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 	wg.Add(len(ff))
 
 	for _, f := range ff {
-		var cancel bool
-		func() {
-			if yesAll {
-				return
-			}
-
-			fName := kld.GetFileName(f) + ".kld"
-			if isFileExistsAlready(fName) {
-				fmt.Println()
-				slog.Warn(fmt.Sprintf("%q already exists, overwrite? [y/n]", fName))
-				answer := askYN()
-				if answer == "y" {
-					return
-				}
-				cancel = true
-			}
-		}()
-		if cancel {
-			wg.Done()
-			continue
-		}
-
 		info, err := os.Stat(f)
 		if err != nil {
 			slog.Error("failed to get file info", "file", f, "error", err)
@@ -117,7 +98,6 @@ func HandleEncryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 }
 
 func HandleWiping(ctx context.Context, kld *engine.Kilid, files []string) {
-
 	if ctx.Err() != nil {
 		return
 	}
@@ -182,7 +162,10 @@ func HandleWiping(ctx context.Context, kld *engine.Kilid, files []string) {
 }
 
 func HandleDecryption(ctx context.Context, kld *engine.Kilid, files []string, password string, deleteSource bool, yesAll bool) error {
-	ff := resolveFiles(files)
+	ff, err := resolveFiles(kld, files, "dec", yesAll)
+	if err != nil {
+		return fmt.Errorf("failed to resolve files: %w", err)
+	}
 	if len(ff) == 0 {
 		return fmt.Errorf("no files to decrypt")
 	}
@@ -195,39 +178,6 @@ func HandleDecryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 	wg.Add(len(ff))
 
 	for _, f := range ff {
-		var extGetfail error
-		var cancel bool
-		func() {
-			if yesAll {
-				return
-			}
-
-			ext, err := kld.GetFileRealExt(f)
-			if err != nil {
-				extGetfail = err
-				return
-			}
-
-			fName := kld.GetFileName(f) + ext
-			if isFileExistsAlready(fName) {
-				fmt.Println()
-				slog.Warn(fmt.Sprintf("%q already exists, overwrite? [y/n]", fName))
-				answer := askYN()
-				if answer == "y" {
-					return
-				}
-				cancel = true
-			}
-		}()
-
-		if cancel {
-			wg.Done()
-			continue
-		}
-		if extGetfail != nil {
-			slog.Error("failed to get original file extension", "file", f, "error", extGetfail)
-			continue
-		}
 
 		info, err := os.Stat(f)
 		if err != nil {
@@ -287,9 +237,17 @@ func HandleDecryption(ctx context.Context, kld *engine.Kilid, files []string, pa
 }
 
 func HandleInfo(ctx context.Context, kld *engine.Kilid, files []string, output *string) error {
-	ff := resolveFiles(files)
+	var validFiles []string
 
-	if len(ff) == 0 {
+	for _, f := range files {
+		if ensureFileExist(f) {
+			validFiles = append(validFiles, f)
+			continue
+		}
+		slog.Error("file not found", "file", f)
+	}
+
+	if len(validFiles) == 0 {
 		return fmt.Errorf("there is no file to print info")
 	}
 
@@ -314,7 +272,7 @@ func HandleInfo(ctx context.Context, kld *engine.Kilid, files []string, output *
 	}
 
 	c := 1
-	for _, f := range ff {
+	for _, f := range validFiles {
 		if ctx.Err() != nil {
 			return fmt.Errorf("operation cancelled")
 		}
@@ -371,7 +329,7 @@ func HandleInfo(ctx context.Context, kld *engine.Kilid, files []string, output *
 			}
 		}
 
-		fmt.Printf("\n Progress: [%d/%d] (%.0f%%) \n\n", c, len(ff), (float64(c) / float64(len(ff)) * 100))
+		fmt.Printf("\n Progress: [%d/%d] (%.0f%%) \n\n", c, len(validFiles), (float64(c) / float64(len(validFiles)) * 100))
 		c++
 	}
 	if output != nil {
@@ -382,8 +340,8 @@ func HandleInfo(ctx context.Context, kld *engine.Kilid, files []string, output *
 	return nil
 }
 
-func resolveFiles(ff []string) []string {
-	var files []string
+func resolveFiles(kld *engine.Kilid, ff []string, mode string, yesAll bool) ([]string, error) {
+	var validFiles []string
 
 	for _, f := range ff {
 		info, err := os.Stat(strings.TrimSpace(f))
@@ -395,19 +353,64 @@ func resolveFiles(ff []string) []string {
 			slog.Error(fmt.Sprintf("%q is a directory, not a file", f))
 			continue
 		}
-		files = append(files, f)
+		validFiles = append(validFiles, f)
 	}
 
-	return files
+	if yesAll {
+		return validFiles, nil
+	}
+
+	var selectedFiles []string
+	if mode == "enc" {
+		for _, f := range validFiles {
+			fName := kld.GetFileName(f) + ".kld"
+			if isFileExistsAlready(fName) {
+				fmt.Println()
+				msg := fmt.Sprintf("%q already exists, overwrite? [y/n]: ", fName)
+				answer := askYN(msg)
+				if answer {
+					selectedFiles = append(selectedFiles, f)
+					continue
+				}
+			} else {
+				selectedFiles = append(selectedFiles, f)
+			}
+		}
+	}
+
+	if mode == "dec" {
+		for _, f := range validFiles {
+			ext, err := kld.GetFileRealExt(f)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get file(%q) real extension: %w", f, err)
+			}
+
+			fName := kld.GetFileName(f) + ext
+			if isFileExistsAlready(fName) {
+				fmt.Println()
+				msg := fmt.Sprintf("%q already exists, overwrite? [y/n]: ", fName)
+				answer := askYN(msg)
+				if answer {
+					selectedFiles = append(selectedFiles, f)
+					continue
+				}
+			} else {
+				selectedFiles = append(selectedFiles, f)
+			}
+		}
+	}
+
+	return selectedFiles, nil
 }
 
-func askYN() string {
+func askYN(msg string) bool {
+	fmt.Print(msg)
 	var answer string
-	fmt.Scanln(&answer)
+	fmt.Scan(&answer)
 	answer = strings.TrimSpace(answer)
 	answer = strings.ToLower(answer)
 
-	return answer
+	return answer == "y"
 }
 
 func isFileExistsAlready(fileName string) bool {

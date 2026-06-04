@@ -64,3 +64,10 @@
 - Fixed a bug that appears in Windows platform, which do not remove incomplete files after a failure.
 - Fixed a bug where Ctrl+C termination triggered a false "WIPING..." log statement even set.
 - Fixed a bug where cancelling the overwrite prompt caused the screen to freeze.
+
+## [3.0.2] - 2026-06-04
+
+### Fixed
+
+- Fixed a bug that caused duplicate-named files to be overwritten without confirmation.
+-
